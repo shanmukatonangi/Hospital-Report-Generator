@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI Medical Report Simplifier</title>
+  <style>
+    :root{
+      --bg-1:#06243b; --bg-2:#0b4b75; --bg-3:#0fa3ff;
+      --card: rgba(255,255,255,0.03);
+      --glass: rgba(255,255,255,0.04);
+      --muted: #9fb0c4;
+      --accent: #4f46e5;
+      --radius:14px;
+      --shadow: 0 10px 40px rgba(2,6,23,0.6);
+      --ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%; margin:0; font-family:var(--ui); -webkit-font-smoothing:antialiased}
+    body{
+      background: radial-gradient(800px 400px at 10% 10%, rgba(15,163,255,0.06), transparent),
+                  linear-gradient(180deg,var(--bg-1) 0%, var(--bg-2) 50%, #032034 100%);
+      color:#e6f3ff; padding:24px; font-size:17px;
+    }
+    .app{max-width:1180px; margin:0 auto; display:grid; grid-template-columns:1fr 440px; gap:28px; align-items:start}
+    header{grid-column:1/-1; display:flex; justify-content:space-between; align-items:center; gap:12px}
+    .brand{display:flex; gap:14px; align-items:center}
+    .logo{width:64px; height:64px; border-radius:14px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;
+           background:linear-gradient(135deg,var(--bg-3), #4fb3ff); color:#002a3a; box-shadow:0 12px 36px rgba(15,163,255,0.08)}
+    h1{font-size:22px; margin:0}
+    .lead{color:var(--muted); margin-top:4px; font-size:14px}
+
+    .card{background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:var(--radius);
+          padding:18px; box-shadow:var(--shadow); border:1px solid rgba(255,255,255,0.03)}
+    .input-area{display:flex; flex-direction:column; gap:12px}
+    label.small{font-size:13px; color:var(--muted)}
+    textarea#report{min-height:260px; padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.04); background:rgba(255,255,255,0.02); color:inherit; resize:vertical; font-size:16px}
+    .controls{display:flex; gap:10px; align-items:center}
+    select, button{background:var(--glass); color:inherit; border:1px solid rgba(255,255,255,0.04); padding:10px 12px; border-radius:10px}
+    button.primary{background:linear-gradient(90deg,var(--accent),#4f46e5); border:none; color:white; padding:10px 14px; cursor:pointer}
+
+    .left-banner{display:block; width:100%; padding:10px 14px; border-radius:12px; text-align:center; color:var(--muted);
+                background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); font-weight:600;
+                box-shadow: 0 10px 30px rgba(3,10,30,0.22); animation:fadeUp .6s cubic-bezier(.2,.9,.3,1) both}
+    @keyframes fadeUp { from{opacity:0; transform:translateY(10px) scale(.995);} to{opacity:1; transform:none;} }
+
+    .sidebar{display:flex; flex-direction:column; gap:14px}
+    .result{min-height:160px; font-size:16px; padding:12px}
+    .visuals-grid{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+
+    .visual-card{
+      position:relative; overflow:hidden; border-radius:12px; cursor:pointer; background:rgba(255,255,255,0.02);
+      transform-style:preserve-3d; transition:transform .26s cubic-bezier(.2,.9,.3,1), box-shadow .26s;
+      border:1px solid rgba(255,255,255,0.03);
+    }
+    .visual-card:hover{box-shadow:0 24px 60px rgba(2,6,23,0.6); transform:translateY(-8px) rotateX(4deg) rotateY(-4deg)}
+    .visual-card img{width:100%; height:180px; object-fit:cover; display:block; transition:transform .6s cubic-bezier(.2,.9,.3,1)}
+    .visual-card .caption{position:absolute; left:12px; bottom:12px; background:linear-gradient(90deg, rgba(0,0,0,0.45), rgba(0,0,0,0.2)); padding:8px 10px; border-radius:10px; font-weight:700; font-size:14px; color:#fff}
+
+    .visual-full{grid-column:1/-1; display:flex; gap:12px; align-items:stretch}
+    .visual-large{flex:1; border-radius:12px; overflow:hidden; background:linear-gradient(90deg, rgba(15,163,255,0.06), rgba(10,80,130,0.04)); padding:16px; display:flex; align-items:center; justify-content:center; color:#eaf6ff; font-weight:800; font-size:18px}
+
+    .translations{display:flex; gap:8px; flex-wrap:wrap}
+    .pill{padding:8px 10px; border-radius:999px; background:rgba(255,255,255,0.02); color:var(--muted); font-weight:600}
+
+    .row-between{display:flex; justify-content:space-between; align-items:center}
+    .btn-ghost{background:transparent; border:1px solid rgba(255,255,255,0.04); padding:8px 10px; border-radius:10px; color:inherit}
+
+    footer{grid-column:1/-1; margin-top:18px; color:var(--muted); font-size:13px}
+
+    @media (max-width:1100px){ .app{grid-template-columns:1fr; padding:12px} .visuals-grid{grid-template-columns:1fr 1fr} .visual-card img{height:160px} }
+    @media (prefers-reduced-motion: reduce){ .visual-card{transition:none} .left-banner{animation:none} }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">AI</div>
+        <div>
+          <h1>Medical Report Simplifier</h1>
+          <div class="lead">Turn complex medical reports into patient-friendly language with visual explanations.</div>
+        </div>
+      </div>
+
+      <div class="controls" aria-hidden="true">
+        <label for="ui-lang" class="small">UI</label>
+        <select id="ui-lang" aria-label="UI language">
+          <option value="en">English</option>
+          <option value="te">తెలుగు</option>
+          <option value="hi">हिन्दी</option>
+        </select>
+        <button id="toggle-theme" class="btn-ghost" title="Toggle theme">Theme</button>
+      </div>
+    </header>
+
+    <!-- LEFT: Input and options -->
+    <div class="card input-area" role="region" aria-label="Input">
+      <div class="row-between" style="align-items:center">
+        <div>
+          <label class="small">Paste report or upload a .txt/.pdf</label>
+          <div style="margin-top:8px" class="left-banner">Paste or upload your report — we’ll convert it to simple patient-friendly language.</div>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center">
+          <input id="file" type="file" accept=".txt,.pdf" aria-label="Upload file" />
+          <button id="insert-sample" class="primary" aria-label="Insert sample">Insert sample</button>
+        </div>
+      </div>
+
+      <textarea id="report" placeholder="Paste the medical report here..." aria-label="Medical report input"></textarea>
+
+      <div class="row-between" style="margin-top:6px;">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <label for="target-lang" class="small">Simplify to</label>
+          <select id="target-lang" aria-label="target language">
+            <option value="en">English</option>
+            <option value="te">తెలుగు (Telugu)</option>
+            <option value="hi">हिन्दी (Hindi)</option>
+          </select>
+
+          <label class="small">Tone</label>
+          <select id="tone" aria-label="tone">
+            <option value="friendly">Friendly</option>
+            <option value="formal">Formal</option>
+            <option value="concise">Concise</option>
+          </select>
+        </div>
+
+        <div style="display:flex; gap:8px; align-items:center;">
+          <button id="simplify" class="primary" aria-label="Simplify">Simplify</button>
+          <button id="read-aloud" class="btn-ghost" aria-label="Read aloud">🔊 Read</button>
+        </div>
+      </div>
+
+      <div class="small" style="margin-top:10px">Tip: For production connect to server-side AI and enable PDF parsing & privacy handling.</div>
+    </div>
+
+    <!-- RIGHT: Output and visuals -->
+    <aside class="sidebar" role="region" aria-label="Output">
+      <div class="card">
+        <div class="row-between">
+          <div style="font-weight:800; font-size:16px">Simplified report</div>
+          <div style="display:flex; gap:8px">
+            <button id="copy" class="btn-ghost" aria-label="Copy">Copy</button>
+            <button id="download" class="btn-ghost" aria-label="Download">Download</button>
+          </div>
+        </div>
+        <div id="result" class="result" aria-live="polite" style="margin-top:12px">Your simplified text will appear here.</div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px">
+          <div style="font-weight:700">Visual explanations</div>
+          <div style="color:var(--muted); font-size:13px">Hover images for detail</div>
+        </div>
+
+        <div id="visualsGrid" class="visuals-grid" aria-live="polite">
+          <div class="visual-card" data-src="https://www.shutterstock.com/image-photo/medical-technology-doctor-use-ai-600nw-2304284475.jpg" tabindex="0">
+            <img loading="lazy"
+                 src="https://www.shutterstock.com/image-photo/medical-technology-doctor-use-ai-600nw-2304284475.jpg"
+                 alt="Doctor using AI medical technology" />
+            <div class="caption">AI-assisted diagnosis</div>
+          </div>
+
+          <div class="visual-card" data-src="https://www.pharmaceutical-technology.com/wp-content/uploads/sites/24/2023/06/GettyImages-1417010023.jpg" tabindex="0">
+            <img loading="lazy"
+                 src="https://www.pharmaceutical-technology.com/wp-content/uploads/sites/24/2023/06/GettyImages-1417010023.jpg"
+                 alt="Pharmaceutical technology" />
+            <div class="caption">Clinical research</div>
+          </div>
+
+          <div class="visual-card" data-src="https://img.freepik.com/premium-photo/doctor-patient-discussing-something-while-sitting-table-hospital-support-healthcare-nurse-with-senior-patient-ai-generated_538213-7768.jpg" tabindex="0">
+            <img loading="lazy"
+                 src="https://img.freepik.com/premium-photo/doctor-patient-discussing-something-while-sitting-table-hospital-support-healthcare-nurse-with-senior-patient-ai-generated_538213-7768.jpg"
+                 alt="Doctor and patient discussion" />
+            <div class="caption">Doctor & patient</div>
+          </div>
+
+          <div class="visual-large" style="min-height:180px">
+            <div>
+              <div style="font-size:18px; font-weight:800">GST on Unlimited Coverage</div>
+              <div style="color:var(--muted); margin-top:8px">Visual callout</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:12px" class="translations">
+          <div class="pill">EN</div>
+          <div class="pill">TE</div>
+          <div class="pill">HI</div>
+        </div>
+      </div>
+    </aside>
+
+    <footer>Images are external links; for production, host licensed copies on your CDN.</footer>
+  </div>
+
+  <script>
+    // ---- Backend base (change if your server runs elsewhere) ----
+    const BACKEND_BASE = 'http://localhost:4000'; // '' means same origin. e.g. 'http://localhost:4000' if needed.
+
+    // -- Basic glossary fallback for fast client-side replacements (keeps UX snappy if server slow) --
+    const GLOSSARY = {
+      'hypertension':'high blood pressure',
+      'BP':'blood pressure',
+      'tachycardia':'fast heart rate',
+      'hemoglobin':'haemoglobin (blood protein that carries oxygen)'
+    };
+
+    // DOM
+    const reportEl = document.getElementById('report');
+    const simplifyBtn = document.getElementById('simplify');
+    const resultEl = document.getElementById('result');
+    const fileInput = document.getElementById('file');
+    const insertSampleBtn = document.getElementById('insert-sample');
+    const copyBtn = document.getElementById('copy');
+    const downloadBtn = document.getElementById('download');
+    const readBtn = document.getElementById('read-aloud');
+    const visualsGrid = document.getElementById('visualsGrid');
+    const targetLangEl = document.getElementById('target-lang');
+    const toneEl = document.getElementById('tone');
+
+    // small helpers
+    function escapeHtml(s){ return String(s).replace(/[&<>"'`]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;",'`':'&#x60;'}[m])); }
+    function showError(msg){ resultEl.innerHTML = `<div style="color:#ffb4b4">${escapeHtml(msg)}</div>`; }
+    function setLoading(state, text=''){ simplifyBtn.disabled = state; if(state) resultEl.innerHTML = `<div style="opacity:0.9">${escapeHtml(text || 'Working...')}</div>`; }
+
+    // insert sample
+    insertSampleBtn.addEventListener('click', () => {
+      reportEl.value = `Patient: R. Kumar\nAge: 54 years\nHistory: Hypertension for 10 years. On evaluation, BP: 150/92 mmHg.\nInvestigations: Hemoglobin: 13.2 g/dL, WBC: 12 000 cells/µL, Platelets: 210 x10^9/L, Fasting glucose: 140 mg/dL, Cholesterol: 220 mg/dL.`;
+    });
+
+    // file upload -> POST /api/upload (server handles parsing)
+    fileInput.addEventListener('change', async (e) => {
+      const f = e.target.files[0];
+      if(!f) return;
+      const fd = new FormData();
+      fd.append('file', f);
+      setLoading(true, 'Parsing uploaded file...');
+      try {
+        const resp = await fetch(`${BACKEND_BASE}/api/upload`, { method: 'POST', body: fd });
+        const j = await resp.json();
+        if (!resp.ok) {
+          showError(j.error || 'Upload/parse failed');
+        } else {
+          reportEl.value = j.text || '';
+          resultEl.innerHTML = `<div style="color:var(--muted)">File parsed — ready to simplify.</div>`;
+        }
+      } catch (err) {
+        console.error(err);
+        showError('Upload failed — check network or server.');
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    // Simplify -> call backend, fallback to client naive if server fails
+    simplifyBtn.addEventListener('click', async () => {
+      const raw = (reportEl.value || '').trim();
+      if (!raw) { alert('Please paste a medical report or upload a file.'); return; }
+
+      const payload = {
+        report: raw,
+        targetLang: targetLangEl.value || 'en',
+        tone: toneEl.value || 'friendly'
+      };
+
+      setLoading(true, 'Calling AI to simplify the report...');
+
+      try {
+        const resp = await fetch(`${BACKEND_BASE}/api/simplify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const j = await resp.json();
+
+        if (!resp.ok || j.error) {
+          // server-side error -> fallback to client-side naive simplification
+          console.warn('Server simplify failed, falling back to local simplifier', j.error || j);
+          showError('Server AI failed. Showing a quick local simplification (not clinical-grade).');
+          const local = quickLocalSimplify(raw);
+          resultEl.innerHTML = formatSimplifiedHtml(local, []);
+          return;
+        }
+
+        const simplified = j.simplified || j.short_summary || '';
+        const visual_cards = j.visual_cards || [];
+        resultEl.innerHTML = formatSimplifiedHtml(simplified, visual_cards);
+        renderVisualCards(visual_cards);
+      } catch (err) {
+        console.error('Simplify error', err);
+        showError('Failed to simplify — network/server error. Showing quick local simplification.');
+        const local = quickLocalSimplify(raw);
+        resultEl.innerHTML = formatSimplifiedHtml(local, []);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    // Quick local (naive) simplifier — fallback only
+    function quickLocalSimplify(text){
+      let out = text.replace(/\n+/g, ' ');
+      Object.keys(GLOSSARY).forEach(k => {
+        out = out.replace(new RegExp('\\b'+k+'\\b','ig'), GLOSSARY[k]);
+      });
+      const sentences = out.split(/(?<=\.|\?|!)\s+/).slice(0,8);
+      return sentences.map(s => s.trim()).join('\n\n');
+    }
+
+    // Format simplified HTML display
+    function formatSimplifiedHtml(simplifiedText, visual_cards){
+      const escaped = escapeHtml(String(simplifiedText || '')).replace(/\n{2,}/g, '\n\n');
+      const withBreaks = escaped.replace(/\n/g, '<br>');
+      let html = '';
+      if (withBreaks.length) {
+        html += `<div style="font-weight:700; margin-bottom:8px">Simplified report</div>`;
+        html += `<div style="line-height:1.6">${withBreaks}</div>`;
+      } else {
+        html += `<div style="color:var(--muted)">No simplified text returned from server.</div>`;
+      }
+
+      if (Array.isArray(visual_cards) && visual_cards.length) {
+        html += `<div style="margin-top:12px;font-weight:700">Visual aids</div><div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap">`;
+        visual_cards.slice(0,6).forEach(vc => {
+          const kp = escapeHtml(vc.keyword || 'image');
+          const hint = escapeHtml(vc.image_hint || '#');
+          html += `<a class="pill" href="${hint}" target="_blank" rel="noopener noreferrer" title="${kp}" style="text-decoration:none">${kp}</a>`;
+        });
+        html += `</div>`;
+      }
+      return html;
+    }
+
+    // Render visual cards (grid) — if server returns image_hint, create cards
+    function renderVisualCards(cards){
+      // keep the original visuals present as base; append server-suggested ones
+      // Clear the dynamic region after the first three base cards
+      // We'll append as new cards after the existing static ones
+      // Remove any previously injected dynamic cards
+      const existingDynamic = visualsGrid.querySelectorAll('.dynamic-card');
+      existingDynamic.forEach(n => n.remove());
+
+      if (!Array.isArray(cards) || cards.length === 0) return;
+
+      cards.slice(0,4).forEach(c => {
+        const div = document.createElement('div');
+        div.className = 'visual-card dynamic-card';
+        div.style.cursor = 'pointer';
+        const img = document.createElement('img');
+        img.alt = c.keyword || 'visual';
+        img.loading = 'lazy';
+        // use image_hint where available; fallback to Unsplash query
+        img.src = c.image_hint || `https://source.unsplash.com/featured/?${encodeURIComponent(c.keyword||'health')}`;
+        img.style.width = '100%';
+        img.style.height = '140px';
+        img.style.objectFit = 'cover';
+        const caption = document.createElement('div');
+        caption.className = 'caption';
+        caption.textContent = c.keyword || 'visual';
+        div.appendChild(img);
+        div.appendChild(caption);
+
+        // click -> open image_hint
+        div.addEventListener('click', () => {
+          const url = c.image_hint || img.src;
+          if (url) window.open(url, '_blank');
+        });
+
+        visualsGrid.appendChild(div);
+      });
+    }
+
+    // Copy & Download
+    copyBtn.addEventListener('click', ()=> {
+      navigator.clipboard.writeText(resultEl.innerText || '').then(()=> alert('Copied simplified text'));
+    });
+    downloadBtn.addEventListener('click', ()=> {
+      const blob = new Blob([resultEl.innerText || ''], {type:'text/plain'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'simplified-report.txt'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // Read aloud
+    readBtn.addEventListener('click', ()=> {
+      const text = resultEl.innerText || '';
+      if(!text) return alert('Nothing to read');
+      const u = new SpeechSynthesisUtterance(text);
+      // pick voice language based on target lang; simple mapping
+      const t = targetLangEl.value;
+      if (t === 'hi') u.lang = 'hi-IN';
+      else if (t === 'te') u.lang = 'te-IN';
+      else u.lang = 'en-US';
+      speechSynthesis.cancel(); speechSynthesis.speak(u);
+    });
+
+    // 3D tilt & interactivity for visual cards (delegated to container)
+    function initVisualInteractivity(){
+      const cards = document.querySelectorAll('.visual-card');
+      cards.forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+          const rect = card.getBoundingClientRect();
+          const cx = rect.left + rect.width/2;
+          const cy = rect.top + rect.height/2;
+          const dx = (e.clientX - cx) / rect.width;
+          const dy = (e.clientY - cy) / rect.height;
+          const rotY = dx * 12;
+          const rotX = -dy * 10;
+          card.style.transform = `perspective(900px) rotateX(${rotX}deg) rotateY(${rotY}deg) translateZ(4px)`;
+          const img = card.querySelector('img');
+          if(img) img.style.transform = `translateZ(30px) scale(1.06)`;
+        });
+        card.addEventListener('mouseleave', ()=> {
+          card.style.transform = 'none';
+          const img = card.querySelector('img'); if(img) img.style.transform = 'none';
+        });
+        card.addEventListener('focus', ()=> {
+          card.style.transform = 'perspective(900px) rotateX(4deg) rotateY(-6deg) translateZ(6px)';
+          const img = card.querySelector('img'); if(img) img.style.transform = 'translateZ(26px) scale(1.04)';
+        });
+        card.addEventListener('blur', ()=> {
+          card.style.transform = 'none';
+          const img = card.querySelector('img'); if(img) img.style.transform = 'none';
+        });
+        // existing static cards open data-src on click
+        card.addEventListener('click', (ev) => {
+          const src = card.getAttribute('data-src');
+          if (src) {
+            // open in new tab
+            window.open(src, '_blank');
+          }
+        });
+      });
+    }
+    // initialize on load (for static ones)
+    initVisualInteractivity();
+
+    // Toggle theme button (simple invert for demo)
+    document.getElementById('toggle-theme').addEventListener('click', () => {
+      document.body.style.filter = document.body.style.filter ? '' : 'invert(.02) hue-rotate(180deg)';
+    });
+
+    // Accessibility: allow paste via Ctrl+V if nothing present (optional UX nicety)
+    window.addEventListener('paste', (e) => {
+      // only when textarea empty and focused elsewhere
+      if (document.activeElement !== reportEl && !reportEl.value.trim()) {
+        const txt = (e.clipboardData || window.clipboardData).getData('text');
+        if (txt) {
+          reportEl.value = txt;
+        }
+      }
+    });
+
+    // End of script
+  </script>
+</body>
+</html>

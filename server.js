@@ -43,20 +43,47 @@ if(!process.env.OPENAI_API_KEY) {
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Helper: call LLM to simplify
-async function callLLMSimplify({ text, targetLang='en', tone='friendly' }) {
-  // Build system + user prompt
-  const system = `You are a helpful medical-language simplifier. Convert clinical medical report text into clear, empathetic, patient-friendly language.
-- Keep medical accuracy.
-- Explain lab values simply (what they mean, normal ranges when relevant).
-- Use short sentences and headings.
-- Provide a short "what to do" section (1-3 action items).
-- Output JSON with keys: "simplified", "visual_keywords" (array), "short_summary".`;
+// Helper: call LLM to simplify in layman-friendly format
+async function callLLMSimplify({ text, targetLang = 'en', tone = 'friendly' }) {
+  const system = `
+You are a friendly and empathetic health explainer.
+Your goal is to rewrite any diagnostic or medical report into a clear, positive, and easily understandable summary for a layperson.
 
-  const user = `Input report:\n"""${text}"""\nTarget language: ${targetLang}\nTone: ${tone}\nReturn JSON only (no extra commentary).`;
+Rules:
+- Avoid jargon completely. Explain terms in plain language.
+- Keep explanations short, friendly, and encouraging.
+- Use emojis and headers to improve readability.
+- Keep medical accuracy.
+- Always output in the same structure below.
+
+STRUCTURE TO FOLLOW STRICTLY:
+1. **Overall Summary**
+2. **Vital Signs**
+3. **Blood Tests (Hematology)**
+4. **Biochemistry (Liver, Kidney, Sugar, Cholesterol)**
+5. **Thyroid Profile**
+6. **Urine Test**
+7. **Doctor’s Remarks**
+8. **Simple Health Advice**
+9. **Final Verdict**
+
+Each section should have simple sentences (max 3–4 per section).
+If some data is missing in the report, skip that section gracefully.
+`;
+
+  const user = `
+Simplify and explain this medical report for a non-medical person.
+Make it warm, encouraging, and conversational.
+
+Report text:
+"""${text}"""
+Target language: ${targetLang}
+Tone: ${tone}
+Return plain text only with emojis and formatting.
+`;
 
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 
-  // Basic safety: truncate excessively long input
   const MAX_INPUT_CHARS = 8000;
   if (text.length > MAX_INPUT_CHARS) {
     text = text.slice(0, MAX_INPUT_CHARS) + "\n\n[TRUNCATED]";
@@ -67,34 +94,30 @@ async function callLLMSimplify({ text, targetLang='en', tone='friendly' }) {
     { role: 'user', content: user }
   ];
 
-  // Call OpenAI Chat Completion
-  const resp = await openai.chat.completions.create({
-    model,
-    messages,
-    temperature: 0.2,
-    max_tokens: 800
-  });
-
-  // The API returns choices; we parse the text (expecting JSON)
-  const raw = resp?.choices?.[0]?.message?.content || resp?.choices?.[0]?.text || '';
-  // Try parse JSON; fallback to a simple wrapper
   try {
-    const parsed = JSON.parse(raw);
-    return parsed;
-  } catch (err) {
-    // If not JSON, attempt to extract JSON inside text
-    const jsonMatch = raw.match(/\{[\s\S]*\}$/);
-    if(jsonMatch) {
-      try { return JSON.parse(jsonMatch[0]); } catch(e) {}
-    }
-    // Fallback: return raw simplified text in structure
+    const resp = await openai.chat.completions.create({
+      model,
+      messages,
+      temperature: 0.6,
+      max_tokens: 1000
+    });
+
+    const raw = resp?.choices?.[0]?.message?.content?.trim() || '';
     return {
       simplified: raw,
+      short_summary: raw.split('\n').slice(0, 3).join(' '),
+      visual_keywords: ['healthy', 'blood', 'heart', 'fitness']
+    };
+  } catch (err) {
+    console.error('LLM simplify error', err);
+    return {
+      simplified: 'Unable to simplify at the moment. Please try again later.',
       visual_keywords: [],
-      short_summary: raw.split('\n').slice(0,3).join(' ')
+      short_summary: ''
     };
   }
 }
+
 
 // API: Upload file (pdf/txt) -> extracts text
 app.post('/api/upload', upload.single('file'), async (req, res) => {
@@ -119,6 +142,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 // API: Simplify text
+// current route
 app.post('/api/simplify', async (req, res) => {
   try {
     const { report, targetLang='en', tone='friendly' } = req.body || {};
@@ -129,14 +153,13 @@ app.post('/api/simplify', async (req, res) => {
     // Basic sanitation
     const clean = String(report).trim();
 
-    // Call LLM
+    // ✅ Call LLM
     const result = await callLLMSimplify({ text: clean, targetLang, tone });
 
-    // Provide a few stock images keyed by likely visual keywords (fallback)
+    // return JSON to frontend
     const visualFallbacks = (result.visual_keywords && result.visual_keywords.length)
       ? result.visual_keywords.slice(0,4).map(k => ({
           keyword: k,
-          // leave these as search hints for the frontend or simple unsplash links
           image_hint: `https://source.unsplash.com/featured/?${encodeURIComponent(k)}`
         }))
       : [
@@ -154,6 +177,7 @@ app.post('/api/simplify', async (req, res) => {
     return res.status(500).json({ error: 'Failed to simplify. Check server logs.' });
   }
 });
+
 
 // Fallback to serve index
 app.get('*', (req, res) => {
